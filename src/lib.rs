@@ -48,7 +48,7 @@ extern crate rand_core;
 extern crate zeroize;
 
 // Used for traits related to constant-time code.
-extern crate subtle;
+pub extern crate subtle;
 
 #[cfg(all(test, feature = "serde"))]
 extern crate bincode;
