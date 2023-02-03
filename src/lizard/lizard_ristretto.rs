@@ -229,7 +229,7 @@ impl RistrettoPoint {
 // Tests
 // ------------------------------------------------------------------------
 
-#[cfg(all(test, feature = "stage2_build"))]
+#[cfg(all(test))]
 mod test {
 
     extern crate sha2;
@@ -242,7 +242,7 @@ mod test {
     use super::*;
 
     fn test_lizard_encode_helper(data: &[u8; 16], result: &[u8; 32]) {
-        let p = RistrettoPoint::lizard_encode::<Sha256>(data).unwrap();
+        let p = RistrettoPoint::lizard_encode::<Sha256>(data);
         let p_bytes = p.compress().to_bytes();
         assert!(&p_bytes == result);
         let p = CompressedRistretto::from_slice(&p_bytes).decompress().unwrap();
@@ -302,5 +302,43 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_elligator_inv_zero() {
+
+        let P = RistrettoPoint::elligator_ristretto_flavor(&FieldElement::zero());
+        let (mask, candidates) = P.decode_253_bits();
+
+        print!("ELLIGATOR INV ZERO TEST\n\n");
+        print!("\nRISTRETTO POINT ENCODING ZERO FIELD ELEMENT\n");
+        print!("{:?} ", P.compress());
+
+        print!("\n\nJACOBI QUARTIC 4 POINTS\n");
+        let jqpoints = P.to_jacobi_quartic_ristretto();
+        for i in 0..4 {
+            print!("\nS: ");
+            for j in 0..32 {
+                print!("{:02x} ", jqpoints[i].S.to_bytes()[j]);
+            }
+            print!("\nT: ");
+            for j in 0..32 {
+                print!("{:02x} ", jqpoints[i].S.to_bytes()[j]);
+            }
+            print!("\n");
+        }
+        println!("");
+
+        print!("\nCANDIDATE FIELD ELEMENTS\n");
+
+        print!("MASK {:02x}\n", mask);
+        for i in 0..8 {
+            println!("");
+            for j in 0..32 {
+                print!("{:02x} ", candidates[i][j]);
+            }
+        }
+        println!("");
+    }
+
 }
 
