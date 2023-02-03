@@ -322,7 +322,7 @@ mod test {
             }
             print!("\nT: ");
             for j in 0..32 {
-                print!("{:02x} ", jqpoints[i].S.to_bytes()[j]);
+                print!("{:02x} ", jqpoints[i].T.to_bytes()[j]);
             }
             print!("\n");
         }
