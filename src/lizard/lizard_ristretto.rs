@@ -229,7 +229,7 @@ impl RistrettoPoint {
 // Tests
 // ------------------------------------------------------------------------
 
-#[cfg(all(test, feature = "stage2_build"))]
+#[cfg(all(test))]
 mod test {
 
     extern crate sha2;

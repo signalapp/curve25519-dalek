@@ -13,7 +13,7 @@ pub(crate) use lizard::u32_constants::*;
 // Tests
 // ------------------------------------------------------------------------
 
-#[cfg(all(test, feature = "stage2_build"))]
+#[cfg(all(test))]
 mod test {
 
     use super::*;
