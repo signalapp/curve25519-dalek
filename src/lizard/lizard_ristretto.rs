@@ -131,7 +131,7 @@ impl RistrettoPoint {
         // such pairs.
 
         let mut mask : u8 = 0;
-        let jcs = self.to_jacobi_quartic_ristretto();
+        let (cornerCase, jcs) = self.to_jacobi_quartic_ristretto();
         let mut ret = [FieldElement::one(); 8];
         
         for i in 0..4 {
@@ -149,6 +149,8 @@ impl RistrettoPoint {
             mask |= tmp << (2 * i + 1);
         }
 
+        mask.conditional_assign(&(mask & 0b00111111), cornerCase);
+
         return (mask, ret)
     }
 
@@ -156,8 +158,9 @@ impl RistrettoPoint {
     /// points Ristretto equivalent to p.
     ///
     /// There is one exception: for (0,-1) there is no point on the quartic and
-    /// so we repeat one on the quartic equivalent to (0,1).
-    fn to_jacobi_quartic_ristretto(&self) -> [JacobiPoint; 4] {
+    /// so we repeat one on the quartic equivalent to (0,1). In this case,
+    /// we repeat one of the points and set the u8 to 1.
+    fn to_jacobi_quartic_ristretto(&self) -> (Choice, [JacobiPoint; 4]) {
         let x2 = self.0.X.square();             // X^2
         let y2 = self.0.Y.square();             // Y^2
         let y4 = y2.square();                   // Y^4
@@ -175,7 +178,7 @@ impl RistrettoPoint {
         let sp_over_xp = &den * &z_pl_y;
 
         let s0 = &s_over_x * &self.0.X;
-        let s1 = &(-(&sp_over_xp)) * &self.0.X;
+        let mut s1 = &(-(&sp_over_xp)) * &self.0.X;
 
         // t_0 := -2/sqrt(-d-1) * Z * sOverX
         // t_1 := -2/sqrt(-d-1) * Z * spOverXp
@@ -195,7 +198,7 @@ impl RistrettoPoint {
         let sp_over_yp = &den * &iz_pl_x;
 
         let mut s2 = &s_over_y * &self.0.Y;
-        let mut s3 = &(-(&sp_over_yp)) * &self.0.Y;
+        let s3 = &(-(&sp_over_yp)) * &self.0.Y;
 
         // t_2 := -2/sqrt(-d-1) * i*Z * sOverY
         // t_3 := -2/sqrt(-d-1) * i*Z * spOverYp
@@ -210,18 +213,19 @@ impl RistrettoPoint {
         // Note that if X=0 or Y=0, then s_i = t_i = 0.
         let x_or_y_is_zero = self.0.X.is_zero() | self.0.Y.is_zero();
         t0.conditional_assign(&FieldElement::one(), x_or_y_is_zero);
-        t1.conditional_assign(&FieldElement::one(), x_or_y_is_zero);
+        t3.conditional_assign(&FieldElement::one(), x_or_y_is_zero);
+        t1.conditional_assign(&lizard_constants::MIDOUBLE_INVSQRT_A_MINUS_D, x_or_y_is_zero);
         t2.conditional_assign(&lizard_constants::MIDOUBLE_INVSQRT_A_MINUS_D, x_or_y_is_zero);
-        t3.conditional_assign(&lizard_constants::MIDOUBLE_INVSQRT_A_MINUS_D, x_or_y_is_zero);
-        s2.conditional_assign(&FieldElement::one(), x_or_y_is_zero);
-        s3.conditional_assign(&(-(&FieldElement::one())), x_or_y_is_zero);
+        s1.conditional_assign(&FieldElement::one(), x_or_y_is_zero);
+        s2.conditional_assign(&(-(&FieldElement::one())), x_or_y_is_zero);
 
-        return [
+
+        return (x_or_y_is_zero, [
             JacobiPoint{S: s0, T: t0},
             JacobiPoint{S: s1, T: t1},
             JacobiPoint{S: s2, T: t2},
             JacobiPoint{S: s3, T: t3},
-        ]
+        ])
     }
 }
 
@@ -242,7 +246,7 @@ mod test {
     use super::*;
 
     fn test_lizard_encode_helper(data: &[u8; 16], result: &[u8; 32]) {
-        let p = RistrettoPoint::lizard_encode::<Sha256>(data).unwrap();
+        let p = RistrettoPoint::lizard_encode::<Sha256>(data);
         let p_bytes = p.compress().to_bytes();
         assert!(&p_bytes == result);
         let p = CompressedRistretto::from_slice(&p_bytes).decompress().unwrap();
