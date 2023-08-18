@@ -273,6 +273,13 @@ mod ristretto_benches {
         });
     }
 
+    fn elligator_inv(c: &mut Criterion) {
+        c.bench_function("RistrettoPoint Elligator Inverse", |b| {
+            let B = &constants::RISTRETTO_BASEPOINT_POINT;
+            b.iter(|| B.elligator_ristretto_flavor_inverse());
+        });
+    }
+
     fn double_and_compress_batch<M: Measurement>(c: &mut BenchmarkGroup<M>) {
         for batch_size in &BATCH_SIZES {
             c.bench_with_input(
@@ -302,6 +309,14 @@ mod ristretto_benches {
         compress,
         decompress,
         double_and_compress_group,
+    }
+
+    criterion_group! {
+        name = elligator_benches;
+        config = Criterion::default();
+        targets =
+        elligator,
+        elligator_inv,
     }
 }
 
@@ -367,6 +382,7 @@ mod scalar_benches {
 }
 
 criterion_main!(
+    ristretto_benches::elligator_benches,
     scalar_benches::scalar_benches,
     montgomery_benches::montgomery_benches,
     ristretto_benches::ristretto_benches,
