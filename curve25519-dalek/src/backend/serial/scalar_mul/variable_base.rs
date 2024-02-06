@@ -7,8 +7,11 @@ use crate::traits::Identity;
 use crate::window::LookupTable;
 
 /// Perform constant-time, variable-base scalar multiplication.
+///
+/// MODIFIED BY SIGNAL: The generic parameter `N` is the maximum number of **nibbles** in `scalar`,
+/// with the top bit of the top nibble clear. See [`Scalar::as_radix_16`].
 #[rustfmt::skip] // keep alignment of explanatory comments
-pub(crate) fn mul(point: &EdwardsPoint, scalar: &Scalar) -> EdwardsPoint {
+pub(crate) fn mul<const N: usize>(point: &EdwardsPoint, scalar: &Scalar) -> EdwardsPoint {
     // Construct a lookup table of [P,2P,3P,4P,5P,6P,7P,8P]
     let lookup_table = LookupTable::<ProjectiveNielsPoint>::from(point);
     // Setting s = scalar, compute
@@ -17,7 +20,7 @@ pub(crate) fn mul(point: &EdwardsPoint, scalar: &Scalar) -> EdwardsPoint {
     //
     // with `-8 ≤ s_i < 8` for `0 ≤ i < 63` and `-8 ≤ s_63 ≤ 8`.
     // This decomposition requires s < 2^255, which is guaranteed by Scalar invariant #1.
-    let scalar_digits = scalar.as_radix_16();
+    let scalar_digits = scalar.as_radix_16::<N>();
     // Compute s*P as
     //
     //    s*P = P*(s_0 +   s_1*16^1 +   s_2*16^2 + ... +   s_63*16^63)
@@ -29,9 +32,9 @@ pub(crate) fn mul(point: &EdwardsPoint, scalar: &Scalar) -> EdwardsPoint {
     // Unwrap first loop iteration to save computing 16*identity
     let mut tmp2;
     let mut tmp3 = EdwardsPoint::identity();
-    let mut tmp1 = &tmp3 + &lookup_table.select(scalar_digits[63]);
+    let mut tmp1 = &tmp3 + &lookup_table.select(scalar_digits[N-1]);
     // Now tmp1 = s_63*P in P1xP1 coords
-    for i in (0..63).rev() {
+    for i in (0..(N-1)).rev() {
         tmp2 = tmp1.as_projective(); // tmp2 =    (prev) in P2 coords
         tmp1 = tmp2.double();        // tmp1 =  2*(prev) in P1xP1 coords
         tmp2 = tmp1.as_projective(); // tmp2 =  2*(prev) in P2 coords

@@ -960,6 +960,34 @@ impl RistrettoPoint {
             scalar * constants::RISTRETTO_BASEPOINT_TABLE
         }
     }
+
+    /// Limited scalar multiplication: compute `scalar * self` when `scalar` is known to be less
+    /// than 2^127.
+    ///
+    /// This is still constant-time.
+    pub fn mul_small_scalar(&self, scalar: &Scalar) -> Self {
+        RistrettoPoint(self.0.mul_small_scalar(scalar))
+    }
+
+    /// Limited multiscalar multiplication: compute `sum(s_i * P)` when every `s_i` is known to be
+    /// less than 2^127.
+    ///
+    /// Equivalent to [`MultiscalarMul::multiscalar_mul`] on `RistrettoPoint`s, but faster, while
+    /// still being constant-time.
+    #[cfg(feature = "alloc")]
+    pub fn multiscalar_mul_small_scalars<I, J>(scalars: I, points: J) -> RistrettoPoint
+    where
+        I: IntoIterator,
+        I::Item: Borrow<Scalar>,
+        J: IntoIterator,
+        J::Item: Borrow<RistrettoPoint>,
+    {
+        let extended_points = points.into_iter().map(|P| P.borrow().0);
+        RistrettoPoint(EdwardsPoint::multiscalar_mul_small_scalars(
+            scalars,
+            extended_points,
+        ))
+    }
 }
 
 define_mul_assign_variants!(LHS = RistrettoPoint, RHS = Scalar);

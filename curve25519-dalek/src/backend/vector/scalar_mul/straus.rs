@@ -44,9 +44,12 @@ pub mod spec {
     /// AVX2 code uses different curve models (it does not pass between
     /// multiple models during scalar mul), and it has to convert the
     /// point representation on the fly.
-    pub struct Straus {}
+    ///
+    /// MODIFIED BY SIGNAL: The generic parameter `N` is the maximum number of **nibbles** in a
+    /// scalar, with the top bit of the top nibble clear. See [`Scalar::as_radix_16`].
+    pub struct Straus<const N: usize> {}
 
-    impl MultiscalarMul for Straus {
+    impl<const N: usize> MultiscalarMul for Straus<N> {
         type Point = EdwardsPoint;
 
         fn multiscalar_mul<I, J>(scalars: I, points: J) -> EdwardsPoint
@@ -65,14 +68,14 @@ pub mod spec {
 
             let scalar_digits_vec: Vec<_> = scalars
                 .into_iter()
-                .map(|s| s.borrow().as_radix_16())
+                .map(|s| s.borrow().as_radix_16::<64>())
                 .collect();
             // Pass ownership to a `Zeroizing` wrapper
             #[cfg(feature = "zeroize")]
             let scalar_digits_vec = Zeroizing::new(scalar_digits_vec);
 
             let mut Q = ExtendedPoint::identity();
-            for j in (0..64).rev() {
+            for j in (0..N).rev() {
                 Q = Q.mul_by_pow_2(4);
                 let it = scalar_digits_vec.iter().zip(lookup_tables.iter());
                 for (s_i, lookup_table_i) in it {
@@ -84,7 +87,7 @@ pub mod spec {
         }
     }
 
-    impl VartimeMultiscalarMul for Straus {
+    impl VartimeMultiscalarMul for Straus<64> {
         type Point = EdwardsPoint;
 
         fn optional_multiscalar_mul<I, J>(scalars: I, points: J) -> Option<EdwardsPoint>

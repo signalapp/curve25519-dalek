@@ -167,7 +167,7 @@ impl VartimePrecomputedStraus {
 
 #[allow(missing_docs)]
 #[cfg(feature = "alloc")]
-pub fn straus_multiscalar_mul<I, J>(scalars: I, points: J) -> EdwardsPoint
+pub fn straus_multiscalar_mul<I, J, const N: usize>(scalars: I, points: J) -> EdwardsPoint
 where
     I: IntoIterator,
     I::Item: core::borrow::Borrow<Scalar>,
@@ -179,19 +179,19 @@ where
     match get_selected_backend() {
         #[cfg(curve25519_dalek_backend = "simd")]
         BackendKind::Avx2 => {
-            self::vector::scalar_mul::straus::spec_avx2::Straus::multiscalar_mul::<I, J>(
+            self::vector::scalar_mul::straus::spec_avx2::Straus::<N>::multiscalar_mul::<I, J>(
                 scalars, points,
             )
         }
         #[cfg(all(curve25519_dalek_backend = "simd", nightly))]
         BackendKind::Avx512 => {
-            self::vector::scalar_mul::straus::spec_avx512ifma_avx512vl::Straus::multiscalar_mul::<
+            self::vector::scalar_mul::straus::spec_avx512ifma_avx512vl::Straus::<N>::multiscalar_mul::<
                 I,
                 J,
             >(scalars, points)
         }
         BackendKind::Serial => {
-            self::serial::scalar_mul::straus::Straus::multiscalar_mul::<I, J>(scalars, points)
+            self::serial::scalar_mul::straus::Straus::<N>::multiscalar_mul::<I, J>(scalars, points)
         }
     }
 }
@@ -237,7 +237,7 @@ pub fn variable_base_mul(point: &EdwardsPoint, scalar: &Scalar) -> EdwardsPoint 
         BackendKind::Avx512 => {
             self::vector::scalar_mul::variable_base::spec_avx512ifma_avx512vl::mul(point, scalar)
         }
-        BackendKind::Serial => self::serial::scalar_mul::variable_base::mul(point, scalar),
+        BackendKind::Serial => self::serial::scalar_mul::variable_base::mul::<64>(point, scalar),
     }
 }
 

@@ -783,6 +783,52 @@ impl EdwardsPoint {
         };
         Self::mul_base(&s)
     }
+
+    /// Limited scalar multiplication: compute `scalar * self` when `scalar` is known to be less
+    /// than 2^127.
+    ///
+    /// This is still constant-time.
+    pub fn mul_small_scalar(&self, scalar: &Scalar) -> Self {
+        assert!(
+            scalar.as_bytes()[16..].iter().all(|&b| b == 0)
+                && scalar.as_bytes()[15] & 0b1000_0000 == 0,
+            "scalar is out of range for mul_small_scalar"
+        );
+        crate::backend::serial::scalar_mul::variable_base::mul::<32>(self, scalar)
+    }
+
+    /// Limited multiscalar multiplication: compute `sum(s_i * P)` when every `s_i` is known to be
+    /// less than 2^127.
+    ///
+    /// Equivalent to [`MultiscalarMul::multiscalar_mul`] on `EdwardsPoint`s, but faster, while
+    /// still being constant-time.
+    #[cfg(feature = "alloc")]
+    pub fn multiscalar_mul_small_scalars<I, J>(scalars: I, points: J) -> EdwardsPoint
+    where
+        I: IntoIterator,
+        I::Item: Borrow<Scalar>,
+        J: IntoIterator,
+        J::Item: Borrow<EdwardsPoint>,
+    {
+        // Sanity-check lengths of input iterators
+        let mut scalars = scalars.into_iter();
+        let mut points = points.into_iter();
+
+        // Lower and upper bounds on iterators
+        let (s_lo, s_hi) = scalars.by_ref().size_hint();
+        let (p_lo, p_hi) = points.by_ref().size_hint();
+
+        // They should all be equal
+        assert_eq!(s_lo, p_lo);
+        assert_eq!(s_hi, Some(s_lo));
+        assert_eq!(p_hi, Some(p_lo));
+
+        // Now we know there's a single size.  When we do
+        // size-dependent algorithm dispatch, use this as the hint.
+        let _size = s_lo;
+
+        crate::backend::straus_multiscalar_mul::<_, _, 32>(scalars, points)
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -820,7 +866,7 @@ impl MultiscalarMul for EdwardsPoint {
         // size-dependent algorithm dispatch, use this as the hint.
         let _size = s_lo;
 
-        crate::backend::straus_multiscalar_mul(scalars, points)
+        crate::backend::straus_multiscalar_mul::<_, _, 64>(scalars, points)
     }
 }
 
@@ -1929,6 +1975,47 @@ mod test {
         }
     }
 
+    /// Check that Mul and mul_small_scalar agree
+    #[test]
+    fn mul_small_scalar() {
+        let mut csprng = rand_core::OsRng;
+
+        // Make a random curve point in the curve. Give it torsion to make things interesting.
+        let random_point = {
+            let mut b = [0u8; 32];
+            csprng.fill_bytes(&mut b);
+            EdwardsPoint::mul_base_clamped(b) + constants::EIGHT_TORSION[1]
+        };
+
+        // Test agreement on random integers less than 2^127
+        for _ in 0..100 {
+            let mut bytes = [0u8; 32];
+            csprng.fill_bytes(&mut bytes[..16]);
+            bytes[15] &= 0b0111_1111;
+            let a = Scalar { bytes };
+
+            assert_eq!(random_point * a, random_point.mul_small_scalar(&a));
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn mul_small_scalar_2_127() {
+        let mut bytes = [0u8; 32];
+        bytes[15] = 0b1000_0000;
+        let a = Scalar { bytes };
+        _ = constants::ED25519_BASEPOINT_POINT.mul_small_scalar(&a);
+    }
+
+    #[test]
+    #[should_panic]
+    fn mul_small_scalar_2_128() {
+        let mut bytes = [0u8; 32];
+        bytes[16] = 1;
+        let a = Scalar { bytes };
+        _ = constants::ED25519_BASEPOINT_POINT.mul_small_scalar(&a);
+    }
+
     #[test]
     #[cfg(feature = "alloc")]
     fn impl_sum() {
@@ -2052,6 +2139,37 @@ mod test {
         assert_eq!(H2, H3);
     }
 
+    // A single iteration of a consistency check for MSM.
+    #[cfg(feature = "alloc")]
+    fn small_multiscalar_consistency_iter(n: usize) {
+        let mut rng = rand::thread_rng();
+
+        // Construct random coefficients x0, ..., x_{n-1},
+        // followed by some extra hardcoded ones.
+        let xs = (0..n)
+            .map(|_| {
+                let mut bytes = [0u8; 32];
+                rng.fill_bytes(&mut bytes[..16]);
+                bytes[15] &= 0b0111_1111;
+                Scalar { bytes }
+            })
+            .collect::<Vec<_>>();
+        let check = xs.iter().map(|xi| xi * xi).sum::<Scalar>();
+
+        // Construct points G_i = x_i * B
+        let Gs = xs.iter().map(EdwardsPoint::mul_base).collect::<Vec<_>>();
+
+        // Compute H1 = <xs, Gs> (consttime)
+        let H1 = EdwardsPoint::multiscalar_mul(&xs, &Gs);
+        // Compute H2 = <xs, Gs> (vartime)
+        let H2 = EdwardsPoint::vartime_multiscalar_mul(&xs, &Gs);
+        // Compute H3 = <xs, Gs> = sum(xi^2) * B
+        let H3 = EdwardsPoint::mul_base(&check);
+
+        assert_eq!(H1, H3);
+        assert_eq!(H2, H3);
+    }
+
     // Use different multiscalar sizes to hit different internal
     // parameters.
 
@@ -2088,6 +2206,15 @@ mod test {
         let iters = 50;
         for _ in 0..iters {
             multiscalar_consistency_iter(1000);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "alloc")]
+    fn small_multiscalar_consistency_n_1000() {
+        let iters = 50;
+        for _ in 0..iters {
+            small_multiscalar_consistency_iter(1000);
         }
     }
 

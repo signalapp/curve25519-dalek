@@ -44,9 +44,12 @@ use crate::traits::VartimeMultiscalarMul;
 ///
 /// [solution]: https://www.jstor.org/stable/2310929
 /// [problem]: https://www.jstor.org/stable/2312273
-pub struct Straus {}
+///
+/// MODIFIED BY SIGNAL: The generic parameter `N` is the maximum number of **nibbles** in a scalar,
+/// with the top bit of the top nibble clear. See [`Scalar::as_radix_16`].
+pub struct Straus<const N: usize = 64> {}
 
-impl MultiscalarMul for Straus {
+impl<const N: usize> MultiscalarMul for Straus<N> {
     type Point = EdwardsPoint;
 
     /// Constant-time Straus using a fixed window of size \\(4\\).
@@ -122,11 +125,11 @@ impl MultiscalarMul for Straus {
         #[cfg_attr(not(feature = "zeroize"), allow(unused_mut))]
         let mut scalar_digits: Vec<_> = scalars
             .into_iter()
-            .map(|s| s.borrow().as_radix_16())
+            .map(|s| s.borrow().as_radix_16::<N>())
             .collect();
 
         let mut Q = EdwardsPoint::identity();
-        for j in (0..64).rev() {
+        for j in (0..N).rev() {
             Q = Q.mul_by_pow_2(4);
             let it = scalar_digits.iter().zip(lookup_tables.iter());
             for (s_i, lookup_table_i) in it {
@@ -144,7 +147,7 @@ impl MultiscalarMul for Straus {
     }
 }
 
-impl VartimeMultiscalarMul for Straus {
+impl VartimeMultiscalarMul for Straus<64> {
     type Point = EdwardsPoint;
 
     /// Variable-time Straus using a non-adjacent form of width \\(5\\).

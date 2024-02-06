@@ -45,6 +45,14 @@ mod edwards_benches {
         });
     }
 
+    fn consttime_variable_base_scalar_mul_small<M: Measurement>(c: &mut BenchmarkGroup<M>) {
+        let B = &constants::ED25519_BASEPOINT_POINT;
+        let s = Scalar::from(897987897u64);
+        c.bench_function("Constant-time variable-base scalar mul small", move |b| {
+            b.iter(|| B.mul_small_scalar(&s))
+        });
+    }
+
     fn vartime_double_base_scalar_mul<M: Measurement>(c: &mut BenchmarkGroup<M>) {
         c.bench_function("Variable-time aA+bB, A variable, B fixed", |bench| {
             let mut rng = thread_rng();
@@ -65,6 +73,7 @@ mod edwards_benches {
         decompress(&mut g);
         consttime_fixed_base_scalar_mul(&mut g);
         consttime_variable_base_scalar_mul(&mut g);
+        consttime_variable_base_scalar_mul_small(&mut g);
         vartime_double_base_scalar_mul(&mut g);
     }
 }
@@ -77,10 +86,23 @@ mod multiscalar_benches {
     use curve25519_dalek::traits::MultiscalarMul;
     use curve25519_dalek::traits::VartimeMultiscalarMul;
     use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
+    use rand_core::RngCore;
 
     fn construct_scalars(n: usize) -> Vec<Scalar> {
         let mut rng = thread_rng();
         (0..n).map(|_| Scalar::random(&mut rng)).collect()
+    }
+
+    fn construct_small_scalars(n: usize) -> Vec<Scalar> {
+        let mut rng = thread_rng();
+        (0..n)
+            .map(|_| {
+                let mut bytes = [0; 32];
+                rng.fill_bytes(&mut bytes[..16]);
+                bytes[15] &= 0b0111_1111;
+                Scalar::from_bytes_mod_order(bytes)
+            })
+            .collect()
     }
 
     fn construct_points(n: usize) -> Vec<EdwardsPoint> {
@@ -105,6 +127,28 @@ mod multiscalar_benches {
                     b.iter_batched(
                         || construct_scalars(size),
                         |scalars| EdwardsPoint::multiscalar_mul(&scalars, &points),
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+        }
+    }
+
+    fn consttime_multiscalar_mul_small_scalars<M: Measurement>(c: &mut BenchmarkGroup<M>) {
+        for multiscalar_size in &MULTISCALAR_SIZES {
+            c.bench_with_input(
+                BenchmarkId::new(
+                    "Constant-time variable-base multiscalar multiplication small",
+                    *multiscalar_size,
+                ),
+                &multiscalar_size,
+                |b, &&size| {
+                    let points = construct_points(size);
+                    // This is supposed to be constant-time, but we might as well
+                    // rerandomize the scalars for every call just in case.
+                    b.iter_batched(
+                        || construct_small_scalars(size),
+                        |scalars| EdwardsPoint::multiscalar_mul_small_scalars(&scalars, &points),
                         BatchSize::SmallInput,
                     );
                 },
@@ -215,6 +259,7 @@ mod multiscalar_benches {
         let mut g = c.benchmark_group("multiscalar benches");
 
         consttime_multiscalar_mul(&mut g);
+        consttime_multiscalar_mul_small_scalars(&mut g);
         vartime_multiscalar_mul(&mut g);
         vartime_precomputed_pure_static(&mut g);
 

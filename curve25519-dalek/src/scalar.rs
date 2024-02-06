@@ -984,9 +984,17 @@ impl Scalar {
     /// The largest value that can be decomposed like this is just over \\(2^{255}\\). Thus, in
     /// order to not error, the top bit MUST NOT be set, i.e., `Self` MUST be less than
     /// \\(2^{255}\\).
-    pub(crate) fn as_radix_16(&self) -> [i8; 64] {
-        debug_assert!(self[31] <= 127);
-        let mut output = [0i8; 64];
+    ///
+    /// MODIFIED BY SIGNAL: The output can be truncated to any even number of nibbles `N` as long as
+    /// the top bit is not set in the last nibble, and no bits are set in the truncated nibbles.
+    pub(crate) fn as_radix_16<const N: usize>(&self) -> [i8; N] {
+        debug_assert!(N % 2 == 0);
+        debug_assert!(N <= 64);
+        assert!(self[N / 2 - 1] <= 127);
+        for i in (N / 2)..32 {
+            assert!(self[i] == 0);
+        }
+        let mut output = [0i8; N];
 
         // Step 1: change radix.
         // Convert from radix 256 (bytes) to radix 16 (nibbles)
@@ -1000,20 +1008,20 @@ impl Scalar {
             (x >> 4) & 15
         }
 
-        for i in 0..32 {
+        for i in 0..(N / 2) {
             output[2 * i] = bot_half(self[i]) as i8;
             output[2 * i + 1] = top_half(self[i]) as i8;
         }
-        // Precondition note: since self[31] <= 127, output[63] <= 7
+        // Precondition note: since self.last() <= 127, output.last() <= 7
 
         // Step 2: recenter coefficients from [0,16) to [-8,8)
-        for i in 0..63 {
+        for i in 0..(N - 1) {
             let carry = (output[i] + 8) >> 4;
             output[i] -= carry << 4;
             output[i + 1] += carry;
         }
-        // Precondition note: output[63] is not recentered.  It
-        // increases by carry <= 1.  Thus output[63] <= 8.
+        // Precondition note: output[N-1] is not recentered.  It
+        // increases by carry <= 1.  Thus output[N-1] <= 8.
 
         output
     }
