@@ -57,7 +57,7 @@ mod edwards_benches {
     }
 
     pub(crate) fn edwards_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("edwards benches");
 
         compress(&mut g);
@@ -210,7 +210,7 @@ mod multiscalar_benches {
     }
 
     pub(crate) fn multiscalar_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("multiscalar benches");
 
         consttime_multiscalar_mul(&mut g);
@@ -244,8 +244,24 @@ mod ristretto_benches {
     }
 
     fn elligator<M: Measurement>(c: &mut BenchmarkGroup<M>) {
+        // Since the map and inverse-map are constant-time operations, we can use "boring" inputs of
+        // all zeros and get an accurate benchmark.
         c.bench_function("RistrettoPoint Elligator", |b| {
             b.iter(|| RistrettoPoint::from_uniform_bytes_single_elligator(&[0u8; 32]));
+        });
+
+        c.bench_function("RistrettoPoint Elligator inverse map", |b| {
+            let point = RistrettoPoint::from_uniform_bytes_single_elligator(&[0u8; 32]);
+            b.iter(|| point.decode_253_bits());
+        });
+
+        c.bench_function("RistrettoPoint Elligator Lizard encode w/ SHA-256", |b| {
+            b.iter(|| RistrettoPoint::lizard_encode::<sha2::Sha256>(&[0u8; 16]));
+        });
+
+        c.bench_function("RistrettoPoint Elligator Lizard decode w/ SHA-256", |b| {
+            let point = RistrettoPoint::lizard_encode::<sha2::Sha256>(&[0u8; 16]);
+            b.iter(|| point.lizard_decode::<sha2::Sha256>());
         });
     }
 
@@ -266,7 +282,7 @@ mod ristretto_benches {
     }
 
     pub(crate) fn ristretto_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("ristretto benches");
 
         compress(&mut g);
@@ -296,7 +312,7 @@ mod montgomery_benches {
     }
 
     pub(crate) fn montgomery_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("montgomery benches");
 
         montgomery_ladder(&mut g);
@@ -356,7 +372,7 @@ mod scalar_benches {
     }
 
     pub(crate) fn scalar_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("scalar benches");
 
         scalar_arith(&mut g);
