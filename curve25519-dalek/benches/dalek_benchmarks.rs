@@ -57,7 +57,7 @@ mod edwards_benches {
     }
 
     pub(crate) fn edwards_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("edwards benches");
 
         compress(&mut g);
@@ -210,7 +210,7 @@ mod multiscalar_benches {
     }
 
     pub(crate) fn multiscalar_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("multiscalar benches");
 
         consttime_multiscalar_mul(&mut g);
@@ -266,7 +266,7 @@ mod ristretto_benches {
     }
 
     pub(crate) fn ristretto_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("ristretto benches");
 
         compress(&mut g);
@@ -296,7 +296,7 @@ mod montgomery_benches {
     }
 
     pub(crate) fn montgomery_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("montgomery benches");
 
         montgomery_ladder(&mut g);
@@ -356,7 +356,7 @@ mod scalar_benches {
     }
 
     pub(crate) fn scalar_benches() {
-        let mut c = Criterion::default();
+        let mut c = Criterion::default().configure_from_args();
         let mut g = c.benchmark_group("scalar benches");
 
         scalar_arith(&mut g);
