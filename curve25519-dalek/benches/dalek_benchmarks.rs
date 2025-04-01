@@ -244,8 +244,24 @@ mod ristretto_benches {
     }
 
     fn elligator<M: Measurement>(c: &mut BenchmarkGroup<M>) {
+        // Since the map and inverse-map are constant-time operations, we can use "boring" inputs of
+        // all zeros and get an accurate benchmark.
         c.bench_function("RistrettoPoint Elligator", |b| {
             b.iter(|| RistrettoPoint::from_uniform_bytes_single_elligator(&[0u8; 32]));
+        });
+
+        c.bench_function("RistrettoPoint Elligator inverse map", |b| {
+            let point = RistrettoPoint::from_uniform_bytes_single_elligator(&[0u8; 32]);
+            b.iter(|| point.decode_253_bits());
+        });
+
+        c.bench_function("RistrettoPoint Elligator Lizard encode w/ SHA-256", |b| {
+            b.iter(|| RistrettoPoint::lizard_encode::<sha2::Sha256>(&[0u8; 16]));
+        });
+
+        c.bench_function("RistrettoPoint Elligator Lizard decode w/ SHA-256", |b| {
+            let point = RistrettoPoint::lizard_encode::<sha2::Sha256>(&[0u8; 16]);
+            b.iter(|| point.lizard_decode::<sha2::Sha256>());
         });
     }
 
